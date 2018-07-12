@@ -35,6 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.assertj.core.api.Assertions;
 import org.assertj.core.api.Condition;
 import org.junit.After;
@@ -43,6 +44,7 @@ import org.junit.Test;
 import reactor.core.Disposable;
 import reactor.core.Disposables;
 import reactor.core.Exceptions;
+import reactor.core.Metrics;
 import reactor.core.Scannable;
 import reactor.core.publisher.DirectProcessor;
 import reactor.core.publisher.Flux;
@@ -90,6 +92,27 @@ public class SchedulersTest {
 	@After
 	public void resetSchedulers() {
 		Schedulers.resetFactory();
+	}
+
+	@Test
+	public void metricsActivatedHasDistinctExecutorIdTags() {
+		SimpleMeterRegistry simpleMeterRegistry = new SimpleMeterRegistry();
+		Metrics.setRegistryCandidate(simpleMeterRegistry);
+		Schedulers.enableMetrics();
+		try {
+			Schedulers.newParallel("A", 4);
+			Schedulers.newParallel("B", 3);
+		}
+		finally {
+			Schedulers.disableMetrics();
+			Metrics.setRegistryCandidate(null);
+		}
+
+		assertThat(simpleMeterRegistry.getMeters()
+		                              .stream()
+		                              .map(m -> m.getId().getTag("executorId"))
+		                              .distinct())
+				.hasSize(7);
 	}
 
 	@Test
