@@ -20,15 +20,12 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.binder.jvm.ExecutorServiceMetrics;
-
-import reactor.core.scheduler.Scheduler;
-import reactor.core.scheduler.Schedulers;
-import reactor.core.scheduler.Schedulers.Factory;
 import reactor.util.annotation.Nullable;
 
 import static io.micrometer.core.instrument.Metrics.globalRegistry;
@@ -116,34 +113,34 @@ public class Metrics {
 	}
 
 	/**
-	 * If the Micrometer instrumentation facade is available, return a simple {@link Scheduler}
-	 * {@link Factory} that instruments {@link ExecutorService}-based schedulers (as
+	 * If the Micrometer instrumentation facade is available, return a {@link BiFunction}
+	 * that takes a {@link String} category and a {@link ScheduledExecutorService} to instrument.
+	 * It can be applied to instruments {@link ExecutorService}-based schedulers (as
 	 * supported by Micrometer, ie. it instruments state of queues but not timing of tasks).
-	 * Use {@link Schedulers#setFactory(Factory)} to activate it.
 	 * <p>
 	 * This factory sends instrumentation data to the Micrometer Global Registry.
 	 *
-	 * @implNote Note that if you need to define a {@link Factory} for other purposes, or if you use
-	 * a library that relies on a specific {@link Factory} behavior, this implementation is
-	 * not suitable, as it reintroduces the default behavior on most methods. You might want
-	 * to consider implementing a composite pattern, or copying the behavior of this factory.
+	 * @implNote Note that if you need to define a Scheduler Factory for other purposes, or if you use
+	 * a library that relies on a specific Factory behavior, you should have it decorate executors
+	 * using this {@link BiFunction} as well.
 	 *
-	 * @return a new {@link Factory} that instruments internal state of {@link ExecutorService} backing
-	 * some standard {@link Scheduler Schedulers}, or the default {@link Factory} if Micrometer isn't available.
+	 * @return a {@link BiFunction} that decorates {@link ScheduledExecutorService} to instrument their internal state,
+	 * or is the identity function if Micrometer isn't available.
 	 */
-	public static Factory instrumentedSchedulers() {
+	public static BiFunction<String, Supplier<? extends ScheduledExecutorService>, ScheduledExecutorService> instrumentedExecutorService() {
 		if (isMicrometerAvailable) {
-			return new MicrometerSchedulersFactory();
+			return new MicrometerSchedulersDecorator();
 		}
-		return new Factory() {};
+		return (t, s) -> s.get();
 	}
 
-	static final class MicrometerSchedulersFactory implements Factory {
+	static final class MicrometerSchedulersDecorator
+			implements BiFunction<String, Supplier<? extends ScheduledExecutorService>, ScheduledExecutorService> {
 
 		private Map<String, Long> seenSchedulers = new HashMap<>();
 
 		@Override
-		public ScheduledExecutorService decorateExecutorService(String schedulerType,
+		public ScheduledExecutorService apply(String schedulerType,
 				Supplier<? extends ScheduledExecutorService> actual) {
 			ScheduledExecutorService service = actual.get();
 

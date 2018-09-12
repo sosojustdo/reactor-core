@@ -29,6 +29,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 import reactor.core.Disposable;
@@ -562,7 +563,15 @@ public abstract class Schedulers {
 
 	static final Factory DEFAULT = new Factory() { };
 
-	static final Factory METRICS_FACTORY = Metrics.instrumentedSchedulers();
+	static final BiFunction<String, Supplier<? extends ScheduledExecutorService>, ScheduledExecutorService> METRICS_DECORATOR = Metrics.instrumentedExecutorService();
+
+	static final Factory METRICS_FACTORY   = new Factory() {
+		@Override
+		public ScheduledExecutorService decorateExecutorService(String schedulerType,
+				Supplier<? extends ScheduledExecutorService> actual) {
+			return METRICS_DECORATOR.apply(schedulerType, actual);
+		}
+	};
 
 
 	static volatile Factory factory = DEFAULT;

@@ -16,6 +16,8 @@
 
 package reactor.core;
 
+import java.util.concurrent.Executors;
+
 import org.assertj.core.api.Assumptions;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -98,7 +100,8 @@ public class MetricsNoMicrometerTest {
 	public void schedulersInstrumentation() {
 		assertThatCode(() -> {
 			Schedulers.enableMetrics();
-			Metrics.instrumentedSchedulers();
+			Metrics.instrumentedExecutorService().apply("foo",
+					Executors::newSingleThreadScheduledExecutor);
 		}).doesNotThrowAnyException();
 	}
 
